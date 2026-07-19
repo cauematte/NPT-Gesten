@@ -54,10 +54,17 @@
   .segsn button.sim.on{background:var(--green);color:#fff}
   .segsn button.nao.on{background:var(--mut);color:#fff}
   .pcard{width:100%;text-align:left;background:var(--white);border:1px solid var(--line);border-left:5px solid var(--green);
-    border-radius:12px;padding:14px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;font-family:inherit}
+    border-radius:12px;padding:14px 14px;cursor:pointer;display:flex;align-items:center;gap:12px;margin-bottom:10px;font-family:inherit}
   .pcard.enc{border-left-color:var(--mut)}
+  .pcard .mid{flex:1;min-width:0}
   .pcard .nm{font-weight:800;font-size:16px;color:var(--ink)}
   .pcard .dt{font-size:13px;color:var(--mut);margin-top:2px}
+  .pcard .right{text-align:right;flex-shrink:0}
+  .chk{width:40px;height:40px;border-radius:50%;border:2.5px solid var(--line);background:var(--white);cursor:pointer;
+    flex-shrink:0;font-size:20px;color:transparent;display:flex;align-items:center;justify-content:center;padding:0}
+  .chk.on{background:var(--green);border-color:var(--green);color:#fff}
+  .aval-hoje{color:var(--green);font-weight:700}
+  .aval-pend{color:var(--amber);font-weight:700}
   .tag{font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px}
   .tag.at{background:var(--greensoft);color:var(--green)}
   .tag.en{background:#E7ECEE;color:var(--mut)}
@@ -92,6 +99,19 @@
   .topline{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px}
   .flexwrap{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end}
   .xbtn{background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;font-family:inherit}
+  .print-only{display:none}
+  @media print{
+    body{background:#fff;padding-bottom:0}
+    header,.no-print{display:none !important}
+    main{max-width:100%;padding:0}
+    .card{border:none;padding:8px 0;margin-bottom:10px;break-inside:avoid}
+    .cnt{border:1px solid var(--line)}
+    .scroll{overflow:visible}
+    table{font-size:12px}
+    .print-only{display:block;margin-bottom:14px}
+    .print-only h2{margin:0;font-size:20px}
+    .print-only .pd{font-size:13px;color:var(--mut)}
+  }
 </style>
 </head>
 <body>
@@ -111,24 +131,29 @@
 var HOSPITAIS=["HMet","HELN","LMECC","HAN","HC","HCP"];
 var EQUIPES=["CG","Vascular","CM","Gastro","Outros Clínicos","Outros Cirúrgicos","Cirurgia Cardíaca","Pediatria"];
 var HOSP_KABIVEN=["HMet","HELN","HC"];
+var HOSP_COR={HMet:"#0F4C5C",HELN:"#E09F3E",LMECC:"#7B5EA7",HAN:"#2E6FB4",HC:"#2E7D5B",HCP:"#C24B6E"};
 var EXAMES=[["ur","Ur"],["cr","Cr"],["na","Na"],["k","K"],["p","P"],["mg","Mg"],["cai","CaI"],["alb","Albumina"],["tgl","TGL"],["colt","Colesterol Total"]];
 var KEY="npt-app-data";
 
 // ============ Estado ============
-var S={patients:[],settings:{kcalCho:4,kcalLip:9,lipPct:30,bolsaKcal:1900,bolsaMl:2053}};
-var UI={aba:"pacientes",selId:null,novo:false,filtro:"Todos",enc:false,editando:false,confExcl:false};
-var novoForm=null, novoExame=null;
+var S={patients:[],settings:{kcalCho:4,kcalLip:9,lipPct:30,bolsaKcal:1900,bolsaMl:2053,olimelKcal:2140,olimelMl:2000}};
+var UI={aba:"pacientes",selId:null,novo:false,filtro:"Todos",tipo:"Todos",enc:false,editando:false,confExcl:false,relIni:"",relFim:"",relHosp:"Todos",pend:false,exParam:"ur"};
+var novoForm=null;
+// Armazenamento: localStorage quando disponível; memória como reserva (ex.: pré-visualização)
+var MEM={};
+function lsGet(k){try{return localStorage.getItem(k);}catch(e){return MEM[k]||null;}}
+function lsSet(k,v){try{localStorage.setItem(k,v);}catch(e){MEM[k]=v;}}
 
 function load(){
   try{
-    var r=localStorage.getItem(KEY);
+    var r=lsGet(KEY);
     if(r){var d=JSON.parse(r);
       S.patients=d.patients||[];
-      S.settings=Object.assign({kcalCho:4,kcalLip:9,lipPct:30,bolsaKcal:1900,bolsaMl:2053},d.settings||{});
+      S.settings=Object.assign({kcalCho:4,kcalLip:9,lipPct:30,bolsaKcal:1900,bolsaMl:2053,olimelKcal:2140,olimelMl:2000},d.settings||{});
     }
   }catch(e){}
 }
-function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){alert("Não foi possível salvar os dados.");}}
+function save(){try{lsSet(KEY,JSON.stringify(S));}catch(e){}}
 
 // ============ Utilidades ============
 function hoje(){return new Date().toISOString().slice(0,10);}
@@ -138,7 +163,20 @@ function dias(i,f){if(!i)return 0;var a=new Date(i+"T00:00:00"),b=new Date((f||h
 function num(v){var n=parseFloat(String(v).replace(",","."));return isNaN(n)?0:n;}
 function f1(n){return (Math.round(n*10)/10).toLocaleString("pt-BR",{minimumFractionDigits:1,maximumFractionDigits:1});}
 function f0(n){return Math.round(n).toLocaleString("pt-BR");}
+function f2(n){return (Math.round(n*100)/100).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});}
 function pacById(id){for(var i=0;i<S.patients.length;i++)if(S.patients[i].id===id)return S.patients[i];return null;}
+// Bolsa pronta do paciente (ou null se formulada)
+function getBolsa(p){
+  var st=S.settings;
+  if(p.hospital==="HAN"){
+    var t=p.bolsaTipo||"formulada";
+    if(t==="kabiven")return{nome:"Kabiven",ml:st.bolsaMl,kcal:st.bolsaKcal};
+    if(t==="olimel")return{nome:"Olimel N9E",ml:st.olimelMl,kcal:st.olimelKcal};
+    return null;
+  }
+  if(HOSP_KABIVEN.indexOf(p.hospital)>=0)return{nome:"Kabiven",ml:st.bolsaMl,kcal:st.bolsaKcal};
+  return null;
+}
 
 // ============ Cálculo ============
 // PTN = peso × meta proteica (4 kcal/g) | LIP = kcal totais × lipPct% ÷ 9 | CHO = resto ÷ 4
@@ -155,48 +193,70 @@ window.A={
   aba:function(a){UI.aba=a;UI.selId=null;UI.novo=false;UI.editando=false;UI.confExcl=false;render();},
   filtro:function(h){UI.filtro=h;render();},
   enc:function(v){UI.enc=v;render();},
-  sel:function(id){UI.selId=id;UI.editando=false;UI.confExcl=false;novoExame=null;render();},
+  pend:function(v){UI.pend=v;render();},
+  chk:function(id){var p=pacById(id);if(!p)return;p.avalData=(p.avalData===hoje())?"":hoje();save();render();},
+  sel:function(id){UI.selId=id;UI.editando=false;UI.confExcl=false;render();},
   voltar:function(){UI.selId=null;render();},
-  abrirNovo:function(){UI.novo=true;novoForm={nome:"",registro:"",leito:"",hospital:"",diagnostico:"",equipe:"",dataInicio:hoje()};render();},
+  abrirNovo:function(){UI.novo=true;novoForm={nome:"",registro:"",leito:"",hospital:"",diagnostico:"",equipe:"",dataInicio:hoje(),tipo:"npt"};render();},
   cancelarNovo:function(){UI.novo=false;render();},
   nf:function(campo,val){
     novoForm[campo]=val;
-    if(campo==="hospital"||campo==="equipe"){render();}
+    if(campo==="hospital"||campo==="equipe"||campo==="tipo"){render();}
     else{var b=document.getElementById("btn-salvar-novo");
       if(b)b.disabled=!(novoForm.nome.trim()&&novoForm.hospital&&novoForm.equipe);}
   },
   salvarNovo:function(){
     var p={id:"p"+Date.now(),status:"ativo",dataFim:null,peso:"",metaKcalKg:"",metaPtnKg:"",pct:100,
-      exames:[],suplPoli:false,suplCB:false,suplGlut:false,suplOutro:""};
+      exames:[],suplPoli:false,suplCB:false,suplGlut:false,suplOligo:false,suplOutro:"",
+      bolsaTipo:"formulada",enteralVazao:"",enteralKcalMl:"",enteralHoras:""};
     Object.assign(p,novoForm);
     S.patients.push(p);save();UI.novo=false;UI.selId=p.id;render();
   },
   set:function(id,campo,val){
     var p=pacById(id);if(!p)return;
     p[campo]=val;save();
-    if(campo==="peso"||campo==="metaKcalKg"||campo==="metaPtnKg"){updRx(p);}
-    else if(campo==="pct"||campo==="hospital"||campo==="equipe"){render();}
+    if(campo==="peso"||campo==="metaKcalKg"||campo==="metaPtnKg"){updRx(p);updEnt(p);}
+    else if(campo==="enteralVazao"||campo==="enteralKcalMl"||campo==="enteralHoras"){updEnt(p);}
+    else if(campo==="pct"||campo==="hospital"||campo==="equipe"||campo==="bolsaTipo"||campo==="tipo"||
+      campo==="suplPoli"||campo==="suplCB"||campo==="suplGlut"||campo==="suplOligo"){render();}
   },
+  pctCustom:function(id,v){
+    var n=num(v);
+    if(n>0&&n<=200){window.A.set(id,"pct",Math.round(n*10)/10);}
+    else{render();}
+  },
+  tipoFiltro:function(t){UI.tipo=t;render();},
+  exParam:function(k){UI.exParam=k;render();},
   toggleEdit:function(){UI.editando=!UI.editando;UI.confExcl=false;render();},
   encerrar:function(id){var p=pacById(id);p.status="encerrado";p.dataFim=hoje();save();render();},
   reativar:function(id){var p=pacById(id);p.status="ativo";p.dataFim=null;save();render();},
   confExclFn:function(v){UI.confExcl=v;render();},
   excluir:function(id){S.patients=S.patients.filter(function(p){return p.id!==id;});save();UI.selId=null;render();},
   ne:function(campo,val){
-    novoExame[campo]=val;
-    var tem=String(novoExame.outros||"").trim()!=="";
-    for(var i=0;i<EXAMES.length;i++)if(String(novoExame[EXAMES[i][0]]||"").trim())tem=true;
+    var p=pacById(UI.selId);if(!p)return;
+    p.exDraft=p.exDraft||{data:hoje(),outros:""};
+    p.exDraft[campo]=val;
+    save(); // rascunho persiste mesmo se fechar o app
+    var tem=String(p.exDraft.outros||"").trim()!=="";
+    for(var i=0;i<EXAMES.length;i++)if(String(p.exDraft[EXAMES[i][0]]||"").trim())tem=true;
     var b=document.getElementById("btn-add-exame");if(b)b.disabled=!tem;
   },
   addExame:function(id){
-    var p=pacById(id);p.exames=p.exames||[];
-    var e={id:"e"+Date.now()};Object.assign(e,novoExame);
+    var p=pacById(id);if(!p||!p.exDraft)return;
+    p.exames=p.exames||[];
+    var e={id:"e"+Date.now()};Object.assign(e,p.exDraft);
+    if(!e.data)e.data=hoje();
     p.exames.push(e);
     p.exames.sort(function(a,b){return a.data<b.data?1:-1;});
-    save();novoExame=null;render();
+    p.exDraft=null;
+    save();render();
   },
   delExame:function(id,eid){var p=pacById(id);p.exames=p.exames.filter(function(e){return e.id!==eid;});save();render();},
   cfg:function(k,v){S.settings[k]=v;save();render();},
+  relIni:function(v){UI.relIni=v;render();},
+  relFim:function(v){UI.relFim=v;render();},
+  relHosp:function(h){UI.relHosp=h;render();},
+  relLimpar:function(){UI.relIni="";UI.relFim="";UI.relHosp="Todos";render();},
   exportar:function(){
     var blob=new Blob([JSON.stringify(S,null,2)],{type:"application/json"});
     var a=document.createElement("a");a.href=URL.createObjectURL(blob);
@@ -236,25 +296,59 @@ function simnaoHtml(rot,val,id,campo){
 // ---- Lista ----
 function vLista(){
   var ativos=S.patients.filter(function(p){return p.status==="ativo";});
+  var ativosNpt=ativos.filter(function(p){return p.tipo!=="semnpt";});
+  var ativosSem=ativos.filter(function(p){return p.tipo==="semnpt";});
   var base=UI.enc?S.patients.slice():ativos.slice();
   if(UI.filtro!=="Todos")base=base.filter(function(p){return p.hospital===UI.filtro;});
-  base.sort(function(a,b){return (a.nome||"").localeCompare(b.nome||"");});
+  if(UI.tipo==="NPT")base=base.filter(function(p){return p.tipo!=="semnpt";});
+  if(UI.tipo==="Sem NPT")base=base.filter(function(p){return p.tipo==="semnpt";});
+  var ativosVisiveis=base.filter(function(p){return p.status==="ativo";});
+  var feitos=ativosVisiveis.filter(function(p){return p.avalData===hoje();}).length;
+  if(UI.pend)base=base.filter(function(p){return p.status!=="ativo"?true:p.avalData!==hoje();});
+  base.sort(function(a,b){
+    var ca=a.status==="ativo"&&a.avalData===hoje()?1:0, cb=b.status==="ativo"&&b.avalData===hoje()?1:0;
+    if(ca!==cb)return ca-cb;
+    return (a.nome||"").localeCompare(b.nome||"");
+  });
+  // chips de hospital com a cor de cada um
+  var hchips='<div class="chips">';
+  var ops=["Todos"].concat(HOSPITAIS);
+  for(var c=0;c<ops.length;c++){var o=ops[c],on=UI.filtro===o,cor=HOSP_COR[o]||"#0F4C5C";
+    hchips+='<button type="button" class="chip'+(on?" on":"")+'" style="'+
+      (on?'background:'+cor+';border-color:'+cor+';':'border-color:'+(HOSP_COR[o]?cor:"var(--line)")+';color:'+(HOSP_COR[o]?cor:"var(--ink)")+';')+
+      '" onclick="window.A.filtro(\''+o+'\')">'+o+'</button>';}
+  hchips+='</div>';
   var h='<div class="topline"><div class="mutinfo"><strong style="color:var(--ink);font-size:18px">'+ativos.length+
-    '</strong> em acompanhamento</div><button class="btn btn-amber" onclick="A.abrirNovo()">+ Novo paciente</button></div>'+
-    '<div style="margin-bottom:14px">'+chipsHtml(["Todos"].concat(HOSPITAIS),UI.filtro,"A.filtro")+
-    '<label style="font-size:13px;color:var(--mut);display:flex;align-items:center;gap:6px;margin-top:10px">'+
-    '<input type="checkbox" '+(UI.enc?"checked":"")+' onchange="A.enc(this.checked)"> incluir encerrados</label></div>';
+    '</strong> em acompanhamento'+
+    (ativosSem.length>0?' <span style="font-size:12px">('+ativosNpt.length+' NPT · '+ativosSem.length+' sem NPT)</span>':"")+
+    (ativosVisiveis.length>0?' · <span class="'+(feitos===ativosVisiveis.length?"aval-hoje":"aval-pend")+'">'+feitos+' de '+ativosVisiveis.length+' avaliados hoje</span>':"")+
+    '</div><button class="btn btn-amber" onclick="window.A.abrirNovo()">+ Novo paciente</button></div>'+
+    '<div style="margin-bottom:14px">'+hchips+
+    '<div style="margin-top:8px">'+chipsHtml(["Todos","NPT","Sem NPT"],UI.tipo,"window.A.tipoFiltro")+'</div>'+
+    '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:10px">'+
+    '<label style="font-size:13px;color:var(--mut);display:flex;align-items:center;gap:6px">'+
+    '<input type="checkbox" '+(UI.pend?"checked":"")+' onchange="window.A.pend(this.checked)"> só pendentes de hoje</label>'+
+    '<label style="font-size:13px;color:var(--mut);display:flex;align-items:center;gap:6px">'+
+    '<input type="checkbox" '+(UI.enc?"checked":"")+' onchange="window.A.enc(this.checked)"> incluir encerrados</label></div></div>';
   if(base.length===0){
-    h+='<div class="empty">Nenhum paciente aqui ainda. Cadastre o primeiro em <strong>+ Novo paciente</strong>.</div>';
+    h+='<div class="empty">'+(UI.pend&&ativosVisiveis.length>0?"Todos os pacientes daqui já foram avaliados hoje! ✓":"Nenhum paciente aqui ainda. Cadastre o primeiro em <strong>+ Novo paciente</strong>.")+'</div>';
   }else{
     for(var i=0;i<base.length;i++){var p=base[i];
       var d=dias(p.dataInicio,p.status==="encerrado"?p.dataFim:null);
-      h+='<button class="pcard '+(p.status==="encerrado"?"enc":"")+'" onclick="A.sel(\''+p.id+'\')">'+
-        '<div><div class="nm">'+esc(p.nome)+'</div><div class="dt">Reg. '+(esc(p.registro)||"—")+
-        (p.leito?" · Leito "+esc(p.leito):"")+' · '+esc(p.hospital)+' · '+esc(p.equipe)+'</div></div>'+
-        '<div style="text-align:right"><span class="tag '+(p.status==="ativo"?"at":"en")+'">'+
+      var checkHoje=p.avalData===hoje();
+      var semNpt=p.tipo==="semnpt";
+      var corH=HOSP_COR[p.hospital]||"var(--green)";
+      var avalTxt=p.status!=="ativo"?"":(checkHoje?'<span class="aval-hoje">Avaliado hoje</span>':(p.avalData?"Última aval.: "+fmtData(p.avalData):"Ainda não avaliado"));
+      h+='<div class="pcard" style="border-left-color:'+corH+(p.status==="encerrado"?";opacity:.72":"")+'" onclick="window.A.sel(\''+p.id+'\')">'+
+        (p.status==="ativo"?'<button class="chk '+(checkHoje?"on":"")+'" title="Marcar avaliado hoje" onclick="event.stopPropagation();window.A.chk(\''+p.id+'\')">✓</button>':"")+
+        '<div class="mid"><div class="nm">'+esc(p.nome)+'</div><div class="dt">Reg. '+(esc(p.registro)||"—")+
+        (p.leito?" · Leito "+esc(p.leito):"")+' · <strong style="color:'+corH+'">'+esc(p.hospital)+'</strong> · '+esc(p.equipe)+
+        (avalTxt?'<br>'+avalTxt:"")+'</div></div>'+
+        '<div class="right">'+
+        (semNpt?'<span class="tag" style="background:var(--tealsoft);color:var(--teal)">Sem NPT</span> ':"")+
+        '<span class="tag '+(p.status==="ativo"?"at":"en")+'">'+
         (p.status==="ativo"?"Ativo":"Encerrado")+'</span><div style="font-size:12px;color:var(--mut);margin-top:4px">'+
-        d+(d===1?" dia":" dias")+' de NPT</div></div></button>';
+        d+(d===1?" dia":" dias")+(semNpt?" de acomp.":" de NPT")+'</div></div></div>';
     }
   }
   return h;
@@ -271,9 +365,10 @@ function vNovo(){
     '<div><span class="lbl">Leito</span><input value="'+esc(f.leito)+'" placeholder="ex.: 302B" oninput="A.nf(\'leito\',this.value)"></div></div>'+
     '<div class="row"><div><span class="lbl">Hospital</span>'+chipsHtml(HOSPITAIS,f.hospital,"nfHosp")+'</div></div>'+
     '<div class="row"><div><span class="lbl">Equipe assistente</span>'+chipsHtml(EQUIPES,f.equipe,"nfEquipe")+'</div></div>'+
+    '<div class="row"><div><span class="lbl">Tipo de acompanhamento</span>'+chipsHtml(["Em NPT","Sem NPT"],f.tipo==="semnpt"?"Sem NPT":"Em NPT","nfTipo")+'</div></div>'+
     '<div class="row"><div><span class="lbl">Diagnóstico</span>'+
-    '<textarea oninput="A.nf(\'diagnostico\',this.value)">'+esc(f.diagnostico)+'</textarea></div></div>'+
-    '<div class="row"><div><span class="lbl">Início da NPT</span>'+
+    '<textarea oninput="window.A.nf(\'diagnostico\',this.value)">'+esc(f.diagnostico)+'</textarea></div></div>'+
+    '<div class="row"><div><span class="lbl">Início da NPT / do acompanhamento</span>'+
     '<input type="date" style="max-width:200px" value="'+f.dataInicio+'" onchange="A.nf(\'dataInicio\',this.value)"></div></div>'+
     '<div style="display:flex;gap:10px;margin-top:8px">'+
     '<button id="btn-salvar-novo" class="btn btn-teal" '+(ok?"":"disabled")+' onclick="A.salvarNovo()">Salvar paciente</button>'+
@@ -281,24 +376,33 @@ function vNovo(){
 }
 window.nfHosp=function(v){window.A.nf("hospital",v);};
 window.nfEquipe=function(v){window.A.nf("equipe",v);};
+window.nfTipo=function(v){window.A.nf("tipo",v==="Sem NPT"?"semnpt":"npt");};
 
 // ---- Detalhe ----
 function vDetalhe(p){
   if(!p)return vLista();
   var rx=calc(p), st=S.settings;
-  var h='<div class="topline"><button class="link" onclick="A.voltar()">← Voltar à lista</button>'+
+  var h='<div class="topline"><button class="link" onclick="window.A.voltar()">← Voltar à lista</button>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
     (p.status==="ativo"
-      ?'<button class="btn-line-red" onclick="A.encerrar(\''+p.id+'\')">Encerrar acompanhamento</button>'
-      :'<button class="btn-line-green" onclick="A.reativar(\''+p.id+'\')">Reativar</button>')+'</div>';
+      ?(p.avalData===hoje()
+        ?'<button class="btn-line-green" onclick="window.A.chk(\''+p.id+'\')">✓ Avaliado hoje</button>'
+        :'<button class="btn btn-teal" style="font-size:13px;padding:9px 14px" onclick="window.A.chk(\''+p.id+'\')">Marcar avaliado hoje</button>')
+      :"")+
+    (p.status==="ativo"
+      ?'<button class="btn-line-red" onclick="window.A.encerrar(\''+p.id+'\')">Encerrar acompanhamento</button>'
+      :'<button class="btn-line-green" onclick="window.A.reativar(\''+p.id+'\')">Reativar</button>')+'</div></div>';
 
+  var semNpt=p.tipo==="semnpt";
   // Identificação
   h+='<div class="card"><div class="topline" style="margin-bottom:0;align-items:flex-start">'+
-    '<div><h2 style="margin:0;font-size:22px">'+esc(p.nome)+'</h2>'+
+    '<div><h2 style="margin:0;font-size:22px">'+esc(p.nome)+
+    (semNpt?' <span class="tag" style="background:var(--tealsoft);color:var(--teal);vertical-align:middle">Sem NPT</span>':"")+'</h2>'+
     '<div class="mutinfo" style="margin-top:4px">Reg. '+(esc(p.registro)||"—")+
-    (p.leito?" · Leito "+esc(p.leito):"")+' · '+esc(p.hospital)+' · '+esc(p.equipe)+
+    (p.leito?" · Leito "+esc(p.leito):"")+' · <strong style="color:'+(HOSP_COR[p.hospital]||"var(--ink)")+'">'+esc(p.hospital)+'</strong> · '+esc(p.equipe)+
     ' · início '+fmtData(p.dataInicio)+
     (p.status==="encerrado"?" · fim "+fmtData(p.dataFim):"")+
-    ' · <strong style="color:var(--ink)">'+dias(p.dataInicio,p.dataFim)+' dias de NPT</strong></div>'+
+    ' · <strong style="color:var(--ink)">'+dias(p.dataInicio,p.dataFim)+' dias de '+(semNpt?"acompanhamento":"NPT")+'</strong></div>'+
     (p.diagnostico?'<div style="margin-top:8px;font-size:14px"><span style="color:var(--mut)">Diagnóstico:</span> '+esc(p.diagnostico)+'</div>':"")+'</div>'+
     '<button class="btn-ghost btn" style="padding:8px 12px;font-size:13px" onclick="A.toggleEdit()">'+(UI.editando?"Fechar edição":"Editar dados")+'</button></div>';
 
@@ -309,6 +413,7 @@ function vDetalhe(p){
       '<div><span class="lbl">Leito</span><input value="'+esc(p.leito||"")+'" onchange="A.set(\''+p.id+'\',\'leito\',this.value)"></div></div>'+
       '<div class="row"><div><span class="lbl">Hospital</span>'+chipsHtml(HOSPITAIS,p.hospital,"setHosp")+'</div></div>'+
       '<div class="row"><div><span class="lbl">Equipe assistente</span>'+chipsHtml(EQUIPES,p.equipe,"setEquipe")+'</div></div>'+
+      '<div class="row"><div><span class="lbl">Tipo de acompanhamento</span>'+chipsHtml(["Em NPT","Sem NPT"],semNpt?"Sem NPT":"Em NPT","setTipo")+'</div></div>'+
       '<div class="row"><div><span class="lbl">Diagnóstico</span><textarea onchange="A.set(\''+p.id+'\',\'diagnostico\',this.value)">'+esc(p.diagnostico)+'</textarea></div></div>'+
       '<div class="row row2"><div><span class="lbl">Início NPT</span><input type="date" value="'+(p.dataInicio||"")+'" onchange="A.set(\''+p.id+'\',\'dataInicio\',this.value)"></div>'+
       (p.status==="encerrado"?'<div><span class="lbl">Fim NPT</span><input type="date" value="'+(p.dataFim||"")+'" onchange="A.set(\''+p.id+'\',\'dataFim\',this.value)"></div>':"<div></div>")+'</div>'+
@@ -319,37 +424,61 @@ function vDetalhe(p){
   h+='</div>';
 
   // Prescrição
+  var pctPadrao=[50,75,100].indexOf(p.pct)>=0;
   h+='<div class="card"><h3>Prescrição</h3>'+
+    (p.hospital==="HAN"?'<div class="row"><div><span class="lbl">Bolsa</span>'+
+      chipsHtml(["Kabiven","Olimel","Formulada"],
+        (p.bolsaTipo==="kabiven"?"Kabiven":p.bolsaTipo==="olimel"?"Olimel":"Formulada"),"setBolsaHan")+'</div></div>':"")+
     '<div class="row row3">'+
-    '<div><span class="lbl">Peso (kg)</span><input inputmode="decimal" value="'+esc(p.peso)+'" placeholder="ex.: 68" oninput="A.set(\''+p.id+'\',\'peso\',this.value)"></div>'+
-    '<div><span class="lbl">Meta calórica (kcal/kg)</span><input inputmode="decimal" value="'+esc(p.metaKcalKg)+'" placeholder="ex.: 25" oninput="A.set(\''+p.id+'\',\'metaKcalKg\',this.value)"></div>'+
-    '<div><span class="lbl">Meta proteica (g/kg)</span><input inputmode="decimal" value="'+esc(p.metaPtnKg)+'" placeholder="ex.: 1,5" oninput="A.set(\''+p.id+'\',\'metaPtnKg\',this.value)"></div></div>'+
-    '<span class="lbl">Percentual da meta</span><div class="seg">'+
-    [50,75,100].map(function(v){return '<button class="'+(p.pct===v?"on":"")+'" onclick="A.set(\''+p.id+'\',\'pct\','+v+')">'+v+'%</button>';}).join("")+
+    '<div><span class="lbl">Peso (kg)</span><input inputmode="decimal" value="'+esc(p.peso)+'" placeholder="ex.: 68" oninput="window.A.set(\''+p.id+'\',\'peso\',this.value)"></div>'+
+    '<div><span class="lbl">Meta calórica (kcal/kg)</span><input inputmode="decimal" value="'+esc(p.metaKcalKg)+'" placeholder="ex.: 25" oninput="window.A.set(\''+p.id+'\',\'metaKcalKg\',this.value)"></div>'+
+    '<div><span class="lbl">Meta proteica (g/kg)</span><input inputmode="decimal" value="'+esc(p.metaPtnKg)+'" placeholder="ex.: 1,5" oninput="window.A.set(\''+p.id+'\',\'metaPtnKg\',this.value)"></div></div>'+
+    '<div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">'+
+    '<div><span class="lbl">Percentual da meta</span><div class="seg">'+
+    [50,75,100].map(function(v){return '<button class="'+(p.pct===v?"on":"")+'" onclick="window.A.set(\''+p.id+'\',\'pct\','+v+')">'+v+'%</button>';}).join("")+
+    '</div></div>'+
+    '<div style="width:110px"><span class="lbl">Outra %'+(!pctPadrao?" ("+esc(p.pct)+"%)":"")+'</span>'+
+    '<input inputmode="decimal" value="'+(pctPadrao?"":esc(p.pct))+'" placeholder="ex.: 60" onchange="window.A.pctCustom(\''+p.id+'\',this.value)"></div>'+
     '</div><div id="rx-out">'+rxHtml(p,rx)+'</div></div>';
 
+  // Nutrição enteral
+  h+='<div class="card"><h3>Nutrição enteral (se houver)</h3>'+
+    '<div class="row row3">'+
+    '<div><span class="lbl">Vazão (mL/h)</span><input inputmode="decimal" value="'+esc(p.enteralVazao||"")+'" placeholder="ex.: 40" oninput="window.A.set(\''+p.id+'\',\'enteralVazao\',this.value)"></div>'+
+    '<div><span class="lbl">Dieta (kcal/mL)</span><input inputmode="decimal" value="'+esc(p.enteralKcalMl||"")+'" placeholder="ex.: 1,5" oninput="window.A.set(\''+p.id+'\',\'enteralKcalMl\',this.value)"></div>'+
+    '<div><span class="lbl">Horas/dia</span><input inputmode="decimal" value="'+esc(p.enteralHoras||"")+'" placeholder="24" oninput="window.A.set(\''+p.id+'\',\'enteralHoras\',this.value)"></div></div>'+
+    '<div id="ent-out">'+entHtml(p)+'</div></div>';
+
   // Suplementos
+  var bolsa=getBolsa(p);
   h+='<div class="card"><h3>Suplementos</h3><div class="flexwrap">';
-  if(HOSP_KABIVEN.indexOf(p.hospital)>=0){
-    h+=simnaoHtml("Polivitamínico",!!p.suplPoli,p.id,"suplPoli")+simnaoHtml("Complexo B",!!p.suplCB,p.id,"suplCB");
-  }else{
+  if(bolsa&&p.hospital!=="HAN"){
+    h+=simnaoHtml("Polivitamínico",!!p.suplPoli,p.id,"suplPoli")+
+       simnaoHtml("Complexo B",!!p.suplCB,p.id,"suplCB")+
+       simnaoHtml("Oligoelementos",!!p.suplOligo,p.id,"suplOligo");
+  }else if(!bolsa){
     h+=simnaoHtml("Glutamina",!!p.suplGlut,p.id,"suplGlut");
   }
   h+='<div style="min-width:200px;flex:0 1 260px"><span class="lbl">Outro medicamento</span>'+
-    '<input value="'+esc(p.suplOutro||"")+'" placeholder="ex.: insulina na bolsa" onchange="A.set(\''+p.id+'\',\'suplOutro\',this.value)"></div></div></div>';
+    '<input value="'+esc(p.suplOutro||"")+'" placeholder="ex.: insulina na bolsa" onchange="window.A.set(\''+p.id+'\',\'suplOutro\',this.value)"></div></div></div>';
 
-  // Exames
-  if(!novoExame)novoExame={data:hoje(),outros:""};
-  var temAlgo=String(novoExame.outros||"").trim()!=="";
-  for(var i=0;i<EXAMES.length;i++)if(String(novoExame[EXAMES[i][0]]||"").trim())temAlgo=true;
+  // Exames — rascunho salvo automaticamente
+  var dr=p.exDraft||{data:hoje(),outros:""};
+  var temAlgo=String(dr.outros||"").trim()!=="";
+  for(var i=0;i<EXAMES.length;i++)if(String(dr[EXAMES[i][0]]||"").trim())temAlgo=true;
+  var restoExames=EXAMES.slice(1); // Ur vai ao lado da data
   h+='<div class="card"><h3>Exames</h3><div style="background:var(--bg);border-radius:12px;padding:12px">'+
+    '<div class="row row2">'+
+    '<div><span class="lbl">Data</span><input type="date" value="'+(dr.data||hoje())+'" onchange="window.A.ne(\'data\',this.value)"></div>'+
+    '<div><span class="lbl">Ur</span><input inputmode="decimal" value="'+esc(dr.ur||"")+'" oninput="window.A.ne(\'ur\',this.value)"></div></div>'+
     '<div class="row" style="grid-template-columns:repeat(auto-fit,minmax(90px,1fr))">'+
-    '<div><span class="lbl">Data</span><input type="date" value="'+novoExame.data+'" onchange="A.ne(\'data\',this.value)"></div>'+
-    EXAMES.map(function(e){return '<div><span class="lbl">'+e[1]+'</span><input inputmode="decimal" value="'+esc(novoExame[e[0]]||"")+'" oninput="A.ne(\''+e[0]+'\',this.value)"></div>';}).join("")+
+    restoExames.map(function(e){return '<div><span class="lbl">'+e[1]+'</span><input inputmode="decimal" value="'+esc(dr[e[0]]||"")+'" oninput="window.A.ne(\''+e[0]+'\',this.value)"></div>';}).join("")+
     '</div><div class="row"><div><span class="lbl">Outros</span>'+
-    '<input value="'+esc(novoExame.outros||"")+'" placeholder="Outros exames / observações" oninput="A.ne(\'outros\',this.value)"></div></div>'+
+    '<input value="'+esc(dr.outros||"")+'" placeholder="Outros exames / observações" oninput="window.A.ne(\'outros\',this.value)"></div></div>'+
+    '<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">'+
     '<button id="btn-add-exame" class="btn btn-teal" style="font-size:14px;padding:10px 18px" '+(temAlgo?"":"disabled")+
-    ' onclick="A.addExame(\''+p.id+'\')">Adicionar exames</button></div>';
+    ' onclick="window.A.addExame(\''+p.id+'\')">Adicionar exames</button>'+
+    '<span style="font-size:12px;color:var(--mut)">rascunho salvo automaticamente</span></div></div>';
   var exames=p.exames||[];
   if(exames.length>0){
     h+='<div class="scroll" style="margin-top:14px"><table><thead><tr><th>Data</th>'+
@@ -358,15 +487,67 @@ function vDetalhe(p){
       h+='<tr><td>'+fmtData(ex.data)+'</td>'+
         EXAMES.map(function(e){return "<td>"+(esc(ex[e[0]])||"—")+"</td>";}).join("")+
         '<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis">'+(esc(ex.outros)||"—")+'</td>'+
-        '<td><button class="xbtn" onclick="A.delExame(\''+p.id+'\',\''+ex.id+'\')">✕</button></td></tr>';
+        '<td><button class="xbtn" onclick="window.A.delExame(\''+p.id+'\',\''+ex.id+'\')">✕</button></td></tr>';
     }
     h+='</tbody></table></div>';
+    // Gráfico de evolução
+    var pchips='<div class="chips" style="margin-top:6px">';
+    for(var g=0;g<EXAMES.length;g++){var ek=EXAMES[g];
+      pchips+='<button type="button" class="chip'+(UI.exParam===ek[0]?" on":"")+'" style="padding:7px 12px;font-size:13px" onclick="window.A.exParam(\''+ek[0]+'\')">'+ek[1]+'</button>';}
+    pchips+='</div>';
+    h+='<div style="margin-top:16px"><span class="lbl">Gráfico de evolução</span>'+pchips+
+      '<canvas id="exchart" width="640" height="260" style="width:100%;max-width:640px;margin-top:10px;background:var(--bg);border-radius:10px"></canvas></div>';
   }
   h+='</div>';
   return h;
 }
 window.setHosp=function(v){window.A.set(UI.selId,"hospital",v);};
 window.setEquipe=function(v){window.A.set(UI.selId,"equipe",v);};
+window.setTipo=function(v){window.A.set(UI.selId,"tipo",v==="Sem NPT"?"semnpt":"npt");};
+window.setBolsaHan=function(v){window.A.set(UI.selId,"bolsaTipo",v==="Kabiven"?"kabiven":v==="Olimel"?"olimel":"formulada");};
+
+// Desenha o gráfico do exame selecionado
+function drawExChart(p){
+  var c=document.getElementById("exchart");
+  if(!c||!c.getContext)return;
+  var ctx=c.getContext("2d");if(!ctx)return;
+  var W=c.width,H=c.height,padL=48,padR=16,padT=18,padB=34;
+  ctx.clearRect(0,0,W,H);
+  var pts=(p.exames||[]).filter(function(e){return String(e[UI.exParam]||"").trim()!==""&&!isNaN(num(e[UI.exParam]));})
+    .map(function(e){return{d:e.data,v:num(e[UI.exParam])};})
+    .sort(function(a,b){return a.d<b.d?-1:1;});
+  var rotulo="";
+  for(var i=0;i<EXAMES.length;i++)if(EXAMES[i][0]===UI.exParam)rotulo=EXAMES[i][1];
+  ctx.fillStyle="#5C7379";ctx.font="12px system-ui";
+  if(pts.length===0){ctx.fillText("Sem valores de "+rotulo+" anotados ainda.",padL,H/2);return;}
+  var vs=pts.map(function(q){return q.v;});
+  var vmin=Math.min.apply(null,vs),vmax=Math.max.apply(null,vs);
+  if(vmin===vmax){vmin-=1;vmax+=1;}
+  var mg=(vmax-vmin)*0.15;vmin-=mg;vmax+=mg;
+  function X(i){return pts.length===1?(padL+(W-padL-padR)/2):padL+(W-padL-padR)*i/(pts.length-1);}
+  function Y(v){return padT+(H-padT-padB)*(1-(v-vmin)/(vmax-vmin));}
+  // linhas de grade e escala
+  ctx.strokeStyle="#D5DFE2";ctx.lineWidth=1;
+  for(var g2=0;g2<=4;g2++){
+    var vv=vmin+(vmax-vmin)*g2/4, yy=Y(vv);
+    ctx.beginPath();ctx.moveTo(padL,yy);ctx.lineTo(W-padR,yy);ctx.stroke();
+    ctx.fillText((Math.round(vv*10)/10).toString().replace(".",","),6,yy+4);
+  }
+  // linha
+  ctx.strokeStyle="#0F4C5C";ctx.lineWidth=2.5;ctx.beginPath();
+  for(var i2=0;i2<pts.length;i2++){var x=X(i2),y=Y(pts[i2].v);i2===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+  ctx.stroke();
+  // pontos, valores e datas
+  for(var i3=0;i3<pts.length;i3++){
+    var x2=X(i3),y2=Y(pts[i3].v);
+    ctx.fillStyle="#0F4C5C";ctx.beginPath();ctx.arc(x2,y2,4.5,0,7);ctx.fill();
+    ctx.font="bold 12px system-ui";
+    ctx.fillText(String(pts[i3].v).replace(".",","),x2-10,y2-10);
+    ctx.fillStyle="#5C7379";ctx.font="11px system-ui";
+    var dl=fmtData(pts[i3].d).slice(0,5);
+    ctx.fillText(dl,x2-14,H-12);
+  }
+}
 
 // Saída da prescrição (recalculada ao digitar, sem perder o foco)
 function rxHtml(p,rx){
@@ -380,14 +561,23 @@ function rxHtml(p,rx){
     '<div class="mac" style="background:var(--ambersoft)"><div class="r" style="color:#7A4E12">Carboidrato</div><div class="v" style="color:#7A4E12">'+f1(rx.choG)+'<span>g</span></div></div>'+
     '<div class="mac" style="background:var(--greensoft)"><div class="r" style="color:var(--green)">Lipídeo</div><div class="v" style="color:var(--green)">'+f1(rx.lipG)+'<span>g</span></div></div></div>'+
     '<div class="resumo">PTN '+f1(rx.ptnG)+' g · CHO '+f1(rx.choG)+' g · LIP '+f1(rx.lipG)+' g · '+f0(rx.kcal)+' kcal ('+p.pct+'% da meta)</div>';
-  if(HOSP_KABIVEN.indexOf(p.hospital)>=0){
-    h+='<div class="kab"><div class="kh">Bolsa pronta — Kabiven '+f0(st.bolsaMl)+' mL / '+f0(st.bolsaKcal)+' kcal · infusão em 24h</div><div class="kg">';
+  // HCP: valores por kg de peso
+  if(p.hospital==="HCP"&&rx.peso>0){
+    h+='<div class="kab" style="border-color:'+(HOSP_COR.HCP)+'"><div class="kh" style="background:#F7E4EA;color:'+HOSP_COR.HCP+'">HCP — prescrição por kg de peso ('+f1(rx.peso)+' kg)</div>'+
+      '<div style="padding:12px 14px;font-size:15px;font-variant-numeric:tabular-nums">'+
+      'Proteína <strong>'+f2(rx.ptnG/rx.peso)+' g/kg</strong> · Glicose <strong>'+f2(rx.choG/rx.peso)+' g/kg</strong> · Lipídeo <strong>'+f2(rx.lipG/rx.peso)+' g/kg</strong>'+
+      '</div></div>';
+  }
+  var bolsa=getBolsa(p);
+  if(bolsa){
     var pcts=[50,75,100];
+    if(pcts.indexOf(p.pct)<0)pcts.push(p.pct);
+    h+='<div class="kab"><div class="kh">Bolsa pronta — '+bolsa.nome+' '+f0(bolsa.ml)+' mL / '+f0(bolsa.kcal)+' kcal · infusão em 24h</div><div class="kg">';
     for(var i=0;i<pcts.length;i++){var v=pcts[i];
       var kcalMeta=rx.peso*num(p.metaKcalKg)*(v/100);
-      var vol=(kcalMeta/st.bolsaKcal)*st.bolsaMl, taxa=vol/24;
-      h+='<button class="'+(p.pct===v?"on":"")+'" onclick="A.set(\''+p.id+'\',\'pct\','+v+')">'+
-        '<div class="kp">'+v+'%</div><div class="kv">'+f1(taxa)+'<span>mL/h</span></div>'+
+      var vol=(kcalMeta/bolsa.kcal)*bolsa.ml, taxa=vol/24;
+      h+='<button class="'+(p.pct===v?"on":"")+'" onclick="window.A.set(\''+p.id+'\',\'pct\','+v+')">'+
+        '<div class="kp">'+v+'%</div><div class="kv">'+f0(taxa)+'<span>mL/h</span></div>'+
         '<div class="kv2">'+f0(vol)+' mL · '+f0(kcalMeta)+' kcal</div></button>';
     }
     h+='</div></div>';
@@ -399,30 +589,72 @@ function updRx(p){
   if(el)el.innerHTML=rxHtml(p,calc(p));
 }
 
+// Saída da nutrição enteral (kcal/dia e total NPT + enteral)
+function entHtml(p){
+  var vaz=num(p.enteralVazao), kml=num(p.enteralKcalMl);
+  var hrs=num(p.enteralHoras);if(hrs<=0||hrs>24)hrs=24;
+  if(vaz<=0||kml<=0)return '<div class="mutinfo" style="font-size:13px">Preencha vazão e kcal/mL se o paciente também recebe dieta enteral.</div>';
+  var entKcal=vaz*hrs*kml;
+  var rx=calc(p);
+  var h='<div class="resumo" style="margin-top:4px">Enteral: '+f1(vaz)+' mL/h × '+f0(hrs)+' h × '+f1(kml)+' kcal/mL = <strong>'+f0(entKcal)+' kcal/dia</strong>';
+  if(rx.ok)h+='<br>NPT ('+p.pct+'%) + enteral = '+f0(rx.kcal)+' + '+f0(entKcal)+' = <strong>'+f0(rx.kcal+entKcal)+' kcal/dia no total</strong>';
+  return h+'</div>';
+}
+function updEnt(p){
+  var el=document.getElementById("ent-out");
+  if(el)el.innerHTML=entHtml(p);
+}
+
 // ---- Relatórios ----
 function vRelatorio(){
-  var ativos=S.patients.filter(function(p){return p.status==="ativo";});
-  var enc=S.patients.filter(function(p){return p.status==="encerrado";});
-  var h='<div class="cnts">'+
+  // Filtro: paciente entra se esteve em NPT em algum momento dentro do período
+  var todos=S.patients.filter(function(p){
+    if(UI.relHosp!=="Todos"&&p.hospital!==UI.relHosp)return false;
+    if(UI.relIni&&(p.dataFim||hoje())<UI.relIni)return false;
+    if(UI.relFim&&p.dataInicio&&p.dataInicio>UI.relFim)return false;
+    return true;
+  });
+  var ativos=todos.filter(function(p){return p.status==="ativo";});
+  var enc=todos.filter(function(p){return p.status==="encerrado";});
+  var temFiltro=UI.relIni||UI.relFim||UI.relHosp!=="Todos";
+  var descFiltro=(UI.relHosp!=="Todos"?"Hospital: "+UI.relHosp+" · ":"")+
+    (UI.relIni||UI.relFim?"Período: "+(UI.relIni?fmtData(UI.relIni):"início")+" a "+(UI.relFim?fmtData(UI.relFim):"hoje"):"");
+  var h='<div class="print-only"><h2>Relatório — Nutrição Parenteral</h2><div class="pd">Gerado em '+fmtData(hoje())+
+    (descFiltro?" · "+descFiltro:"")+
+    ' · '+ativos.length+' em acompanhamento · '+enc.length+' já acompanhados · '+todos.length+' no total</div></div>'+
+    '<div class="card no-print"><h3>Filtros do relatório</h3>'+
+    '<div class="row row2" style="max-width:340px"><div><span class="lbl">De (início)</span>'+
+    '<input type="date" value="'+UI.relIni+'" onchange="window.A.relIni(this.value)"></div>'+
+    '<div><span class="lbl">Até (fim)</span><input type="date" value="'+UI.relFim+'" onchange="window.A.relFim(this.value)"></div></div>'+
+    '<div class="row"><div><span class="lbl">Hospital</span>'+chipsHtml(["Todos"].concat(HOSPITAIS),UI.relHosp,"relHospFn")+'</div></div>'+
+    '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">'+
+    '<button class="btn btn-teal" onclick="window.print()">Gerar PDF</button>'+
+    (temFiltro?'<button class="btn btn-ghost" onclick="window.A.relLimpar()">Limpar filtros</button>':"")+
+    '</div>'+(temFiltro?'<div style="font-size:13px;color:var(--mut);margin-top:10px">Mostrando: '+descFiltro+'</div>':"")+'</div>'+
+    '<div class="cnts">'+
     '<div class="cnt" style="background:var(--greensoft)"><div class="v" style="color:var(--green)">'+ativos.length+'</div><div class="r" style="color:var(--green)">Em acompanhamento</div></div>'+
     '<div class="cnt" style="background:#E7ECEE"><div class="v" style="color:var(--mut)">'+enc.length+'</div><div class="r" style="color:var(--mut)">Já acompanhados</div></div>'+
-    '<div class="cnt" style="background:var(--tealsoft)"><div class="v" style="color:var(--teal)">'+S.patients.length+'</div><div class="r" style="color:var(--teal)">Total geral</div></div></div>';
+    '<div class="cnt" style="background:var(--tealsoft)"><div class="v" style="color:var(--teal)">'+todos.length+'</div><div class="r" style="color:var(--teal)">Total geral</div></div></div>';
   for(var i=0;i<HOSPITAIS.length;i++){var hp=HOSPITAIS[i];
-    var doH=S.patients.filter(function(p){return p.hospital===hp;});
+    if(UI.relHosp!=="Todos"&&hp!==UI.relHosp)continue;
+    var doH=todos.filter(function(p){return p.hospital===hp;});
     if(doH.length===0)continue;
     doH.sort(function(a,b){return (a.nome||"").localeCompare(b.nome||"");});
     h+='<div class="card"><h3>'+hp+' <span style="color:var(--mut);font-weight:500;font-size:13px">· '+doH.length+' paciente'+(doH.length>1?"s":"")+'</span></h3>'+
       '<div class="scroll"><table><thead><tr><th>Nome</th><th>Registro</th><th>Equipe</th><th>Tempo de NPT</th><th>Status</th></tr></thead><tbody>';
     for(var j=0;j<doH.length;j++){var p=doH[j];
-      h+='<tr><td style="font-weight:700">'+esc(p.nome)+'</td><td>'+(esc(p.registro)||"—")+'</td><td>'+esc(p.equipe)+'</td>'+
+      h+='<tr><td style="font-weight:700">'+esc(p.nome)+
+        (p.tipo==="semnpt"?' <span class="tag" style="background:var(--tealsoft);color:var(--teal)">Sem NPT</span>':"")+
+        '</td><td>'+(esc(p.registro)||"—")+'</td><td>'+esc(p.equipe)+'</td>'+
         '<td>'+dias(p.dataInicio,p.dataFim)+' dias</td>'+
         '<td><span class="tag '+(p.status==="ativo"?"at":"en")+'">'+(p.status==="ativo"?"Ativo":"Encerrado")+'</span></td></tr>';
     }
     h+='</tbody></table></div></div>';
   }
-  if(S.patients.length===0)h+='<div class="empty">Sem dados ainda — cadastre pacientes na aba <strong>Pacientes</strong>.</div>';
+  if(todos.length===0)h+='<div class="empty">'+(temFiltro?"Nenhum paciente encontrado com esses filtros.":"Sem dados ainda — cadastre pacientes na aba <strong>Pacientes</strong>.")+'</div>';
   return h;
 }
+window.relHospFn=function(v){window.A.relHosp(v);};
 
 // ---- Ajustes ----
 function vConfig(){
@@ -434,10 +666,14 @@ function vConfig(){
     '<div class="row"><div><span class="lbl">Carboidrato (kcal/g)</span>'+chipsHtml(["4","3.4"],String(st.kcalCho),"cfgKcalCho")+'</div></div>'+
     '<div class="row"><div><span class="lbl">Lipídeo (kcal/g)</span>'+chipsHtml(["9","10"],String(st.kcalLip),"cfgKcalLip")+'</div></div>'+
     '<div style="border-top:1px solid var(--line);padding-top:14px;margin-top:4px">'+
-    '<div style="font-size:13px;font-weight:800;color:var(--teal);margin-bottom:10px">Bolsa pronta (HMet, HELN, HC)</div>'+
+    '<div style="font-size:13px;font-weight:800;color:var(--teal);margin-bottom:10px">Kabiven (HMet, HELN, HC, HAN)</div>'+
     '<div class="row row2" style="max-width:320px">'+
-    '<div><span class="lbl">Calorias (kcal)</span><input inputmode="numeric" value="'+st.bolsaKcal+'" onchange="A.cfg(\'bolsaKcal\',parseFloat(this.value)||1900)"></div>'+
-    '<div><span class="lbl">Volume (mL)</span><input inputmode="numeric" value="'+st.bolsaMl+'" onchange="A.cfg(\'bolsaMl\',parseFloat(this.value)||2053)"></div></div></div></div>'+
+    '<div><span class="lbl">Calorias (kcal)</span><input inputmode="numeric" value="'+st.bolsaKcal+'" onchange="window.A.cfg(\'bolsaKcal\',parseFloat(this.value)||1900)"></div>'+
+    '<div><span class="lbl">Volume (mL)</span><input inputmode="numeric" value="'+st.bolsaMl+'" onchange="window.A.cfg(\'bolsaMl\',parseFloat(this.value)||2053)"></div></div>'+
+    '<div style="font-size:13px;font-weight:800;color:var(--teal);margin:10px 0">Olimel N9E (HAN)</div>'+
+    '<div class="row row2" style="max-width:320px">'+
+    '<div><span class="lbl">Calorias (kcal)</span><input inputmode="numeric" value="'+st.olimelKcal+'" onchange="window.A.cfg(\'olimelKcal\',parseFloat(this.value)||2140)"></div>'+
+    '<div><span class="lbl">Volume (mL)</span><input inputmode="numeric" value="'+st.olimelMl+'" onchange="window.A.cfg(\'olimelMl\',parseFloat(this.value)||2000)"></div></div></div></div>'+
     '<div class="card" style="max-width:560px"><h3 style="font-size:18px;color:var(--ink)">Backup dos dados</h3>'+
     '<p class="mutinfo" style="margin:0 0 14px">Os dados ficam salvos apenas neste aparelho. Exporte um backup de vez em quando para não perder nada, e use a importação para restaurar ou levar para outro aparelho.</p>'+
     '<div style="display:flex;gap:10px;flex-wrap:wrap">'+
@@ -461,7 +697,12 @@ function render(){
   if(UI.aba==="relatorio"){el.innerHTML=vRelatorio();return;}
   if(UI.aba==="config"){el.innerHTML=vConfig();return;}
   if(UI.novo){el.innerHTML=vNovo();return;}
-  if(UI.selId){el.innerHTML=vDetalhe(pacById(UI.selId));return;}
+  if(UI.selId){
+    el.innerHTML=vDetalhe(pacById(UI.selId));
+    var pp=pacById(UI.selId);
+    if(pp)drawExChart(pp);
+    return;
+  }
   el.innerHTML=vLista();
 }
 
